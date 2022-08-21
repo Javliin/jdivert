@@ -18,6 +18,7 @@
 package com.github.ffalcinelli.jdivert.windivert;
 
 import com.sun.jna.Structure;
+import com.sun.jna.Union;
 import com.sun.jna.platform.win32.WinDef;
 
 import java.util.Arrays;
@@ -28,15 +29,32 @@ import java.util.List;
  * Created by fabio on 20/10/2016.
  */
 public class WinDivertAddress extends Structure {
-    public WinDef.UINT IfIdx;
-    public WinDef.UINT SubIfIdx;
-    public WinDef.USHORT Direction;
+    public static class WinDivertAddressUnion extends Union {
+        public WinDivertDataNetwork network;
+        public WinDivertDataFlow flow;
+        public WinDivertDataFlow socket;
+        public WinDivertDataReflect reflect;
+
+        @Override
+        protected List getFieldOrder() {
+            return Arrays.asList(
+                    "network",
+                    "flow",
+                    "socket",
+                    "reflect");
+        }
+    }
+
+    public long timestamp;
+    public WinDef.ULONG flags;
+    public WinDivertAddressUnion union;
 
     @Override
     protected List getFieldOrder() {
-        return Arrays.asList("IfIdx",
-                "SubIfIdx",
-                "Direction");
+        return Arrays.asList(
+                "timestamp",
+                "flags",
+                "union");
     }
 
     @Override
@@ -46,17 +64,7 @@ public class WinDivertAddress extends Structure {
 
         WinDivertAddress that = (WinDivertAddress) o;
 
-        return IfIdx.intValue() == that.IfIdx.intValue() &&
-                SubIfIdx.intValue() == that.SubIfIdx.intValue() &&
-                Direction.intValue() == that.Direction.intValue();
-
-    }
-
-    @Override
-    public int hashCode() {
-        int result = 31 * IfIdx.hashCode();
-        result = 31 * result + SubIfIdx.hashCode();
-        result = 31 * result + Direction.hashCode();
-        return result;
+        return timestamp == that.timestamp &&
+                flags.equals(that.flags);
     }
 }

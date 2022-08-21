@@ -22,6 +22,7 @@ import com.github.ffalcinelli.jdivert.exceptions.WinDivertException;
 import com.github.ffalcinelli.jdivert.windivert.WinDivertAddress;
 import com.github.ffalcinelli.jdivert.windivert.WinDivertDLL;
 import com.sun.jna.Memory;
+import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.ptr.LongByReference;
 
@@ -39,7 +40,7 @@ import static com.sun.jna.platform.win32.WinNT.HANDLE;
  * Created by fabio on 20/10/2016.
  */
 public class WinDivert {
-    public static int DEFAULT_PACKET_BUFFER_SIZE = 1500;
+    public static int DEFAULT_PACKET_BUFFER_SIZE = 1000000;
     private WinDivertDLL dll = WinDivertDLL.INSTANCE;
     private String filter;
     private Layer layer;
@@ -49,8 +50,8 @@ public class WinDivert {
 
     /**
      * Create a new WinDivert instance based upon the given filter for
-     * {@link Enums.Layer#NETWORK NETWORK} layer with priority set to 0 and in
-     * {@link Enums.Flag#DEFAULT DEFAULT} mode (Drop and divert packet).
+     * {@link Layer#NETWORK NETWORK} layer with priority set to 0 and in
+     * {@link Flag#DEFAULT DEFAULT} mode (Drop and divert packet).
      *
      * @param filter The filter string expressed using <a href="https://www.reqrypt.org/windivert-doc.html#filter_language">WinDivert filter language.</a>
      */
@@ -63,9 +64,9 @@ public class WinDivert {
      * Create a new WinDivert instance based upon the given parameters
      *
      * @param filter   The filter string expressed using <a href="https://www.reqrypt.org/windivert-doc.html#filter_language">WinDivert filter language.</a>
-     * @param layer    The {@link Enums.Layer layer}
+     * @param layer    The {@link Layer layer}
      * @param priority The priority of the handle
-     * @param flags    Additional {@link Enums.Flag flags}
+     * @param flags    Additional {@link Flag flags}
      */
     public WinDivert(String filter, Layer layer, int priority, Flag... flags) {
         this.filter = filter;
@@ -146,7 +147,7 @@ public class WinDivert {
 
     /**
      * Receives a diverted packet that matched the filter.<br>
-     * The return value is a {@link com.github.ffalcinelli.jdivert.Packet packet}.
+     * The return value is a {@link Packet packet}.
      * <p>
      * The remapped function is {@code WinDivertRecv}:
      * </p>
@@ -162,7 +163,7 @@ public class WinDivert {
      * <p>
      * For more info on the C call visit: <a href="http://reqrypt.org/windivert-doc.html#divert_recv">http://reqrypt.org/windivert-doc.html#divert_recv</a>
      *
-     * @return A {@link com.github.ffalcinelli.jdivert.Packet Packet} instance
+     * @return A {@link Packet Packet} instance
      * @throws WinDivertException Whenever the DLL call sets a LastError different by 0 (Success) or 997 (Overlapped I/O
      *                            is in progress)
      */
@@ -172,7 +173,7 @@ public class WinDivert {
 
     /**
      * Receives a diverted packet that matched the filter.<br>
-     * The return value is a {@link com.github.ffalcinelli.jdivert.Packet packet}.
+     * The return value is a {@link Packet packet}.
      * <p>
      * The remapped function is {@code WinDivertRecv}:
      * </p>
@@ -189,7 +190,7 @@ public class WinDivert {
      * For more info on the C call visit: <a href="http://reqrypt.org/windivert-doc.html#divert_recv">http://reqrypt.org/windivert-doc.html#divert_recv</a>
      *
      * @param bufsize The size for the buffer to allocate
-     * @return A {@link com.github.ffalcinelli.jdivert.Packet Packet} instance
+     * @return A {@link Packet Packet} instance
      * @throws WinDivertException Whenever the DLL call sets a LastError different by 0 (Success) or 997 (Overlapped I/O
      *                            is in progress)
      */
@@ -197,9 +198,12 @@ public class WinDivert {
         WinDivertAddress address = new WinDivertAddress();
         Memory buffer = new Memory(bufsize);
         IntByReference recvLen = new IntByReference();
-        dll.WinDivertRecv(handle, buffer, bufsize, address.getPointer(), recvLen);
+        dll.WinDivertRecv(handle, buffer, bufsize, recvLen, address.getPointer());
+        address.read();
+
         throwExceptionOnGetLastError();
         byte[] raw = buffer.getByteArray(0, recvLen.getValue());
+        buffer.close();
         return new Packet(raw, address);
     }
 
@@ -208,7 +212,7 @@ public class WinDivert {
      * Recalculates the checksum before sending.<br>
      * The return value is the number of bytes actually sent.<br>
      * <p>
-     * The injected packet may be one received from {@link com.github.ffalcinelli.jdivert.WinDivert#recv() recv}, or a modified version, or a completely new packet.
+     * The injected packet may be one received from {@link WinDivert#recv() recv}, or a modified version, or a completely new packet.
      * Injected packets can be captured and diverted again by other WinDivert handles with lower priorities.
      * </p><p>
      * The remapped function is {@code WinDivertSend}:
@@ -225,7 +229,7 @@ public class WinDivert {
      * <p>
      * For more info on the C call visit: <a href="http://reqrypt.org/windivert-doc.html#divert_send">http://reqrypt.org/windivert-doc.html#divert_send</a>
      *
-     * @param packet The {@link com.github.ffalcinelli.jdivert.Packet Packet} to send
+     * @param packet The {@link Packet Packet} to send
      * @return The number of bytes actually sent
      * @throws WinDivertException Whenever the DLL call sets a LastError different by 0 (Success) or 997 (Overlapped I/O
      *                            is in progress)
@@ -237,12 +241,12 @@ public class WinDivert {
     /**
      * Injects a packet into the headers stack.<br>
      * Recalculates the checksum before sending unless {@code recalculateChecksum=false} is passed:<ul>
-     * <li>If {@code recalculateChecksum=true} then checksums are calculated using the given {@link Enums.CalcChecksumsOption options}.</li>
-     * <li>If {@code recalculateChecksum=false} then {@link Enums.CalcChecksumsOption options} are ignored.</li>
+     * <li>If {@code recalculateChecksum=true} then checksums are calculated using the given {@link CalcChecksumsOption options}.</li>
+     * <li>If {@code recalculateChecksum=false} then {@link CalcChecksumsOption options} are ignored.</li>
      * </ul>
      * The return value is the number of bytes actually sent.
      * <p>
-     * The injected packet may be one received from {@link com.github.ffalcinelli.jdivert.WinDivert#recv() recv}, or a modified version, or a completely new packet.
+     * The injected packet may be one received from {@link WinDivert#recv() recv}, or a modified version, or a completely new packet.
      * Injected packets can be captured and diverted again by other WinDivert handles with lower priorities.
      * </p><p>
      * The remapped function is {@code WinDivertSend}:
@@ -259,9 +263,9 @@ public class WinDivert {
      * <p>
      * For more info on the C call visit: <a href="http://reqrypt.org/windivert-doc.html#divert_send">http://reqrypt.org/windivert-doc.html#divert_send</a>
      *
-     * @param packet              The {@link com.github.ffalcinelli.jdivert.Packet Packet} to send
-     * @param recalculateChecksum Whether to recalculate the checksums or pass the {@link com.github.ffalcinelli.jdivert.Packet packet} as is.
-     * @param options             A set of {@link Enums.CalcChecksumsOption options} to use when recalculating checksums.
+     * @param packet              The {@link Packet Packet} to send
+     * @param recalculateChecksum Whether to recalculate the checksums or pass the {@link Packet packet} as is.
+     * @param options             A set of {@link CalcChecksumsOption options} to use when recalculating checksums.
      * @return The number of bytes actually sent
      * @throws WinDivertException Whenever the DLL call sets a LastError different by 0 (Success) or 997 (Overlapped I/O
      *                            is in progress)
@@ -275,13 +279,14 @@ public class WinDivert {
         Memory buffer = new Memory(raw.length);
 
         buffer.write(0, raw, 0, raw.length);
-        dll.WinDivertSend(handle, buffer, raw.length, packet.getWinDivertAddress().getPointer(), sendLen);
+        dll.WinDivertSend(handle, buffer, raw.length, sendLen, packet.getWinDivertAddress().getPointer());
         throwExceptionOnGetLastError();
+        buffer.close();
         return sendLen.getValue();
     }
 
     /**
-     * Get a WinDivert parameter. See {@link Enums.Param Param} for the list of parameters.
+     * Get a WinDivert parameter. See {@link Param Param} for the list of parameters.
      * <p>
      * The remapped function is {@code WinDivertGetParam}:
      * </p>
@@ -295,7 +300,7 @@ public class WinDivert {
      * <p>
      * For more info on the C call visit: <a href="http://reqrypt.org/windivert-doc.html#divert_get_param">http://reqrypt.org/windivert-doc.html#divert_get_param</a>
      *
-     * @param param The {@link Enums.Param param} to set
+     * @param param The {@link Param param} to set
      * @return The value for the parameter
      */
     public long getParam(Param param) {
@@ -308,7 +313,7 @@ public class WinDivert {
     }
 
     /**
-     * Set a WinDivert parameter. See {@link Enums.Param Param} for the list of parameters.
+     * Set a WinDivert parameter. See {@link Param Param} for the list of parameters.
      * <p>
      * The remapped function is {@code DivertSetParam}:
      * </p>
@@ -322,7 +327,7 @@ public class WinDivert {
      * <p>
      * For more info on the C call visit: <a href="http://reqrypt.org/windivert-doc.html#divert_set_param">http://reqrypt.org/windivert-doc.html#divert_set_param</a>
      *
-     * @param param The {@link Enums.Param param} to set
+     * @param param The {@link Param param} to set
      * @param value The value for the parameter
      */
     public void setParam(Param param, long value) {

@@ -46,16 +46,16 @@ public interface WinDivertDLL extends Library {
             HANDLE handle,
             Pointer pPacket,
             int packetLen,
-            Pointer pAddr,
-            IntByReference recvLen
+            IntByReference recvLen,
+            Pointer pAddr
     );
 
     BOOL WinDivertSend(
             HANDLE handle,
             Pointer pPacket,
             int packetLen,
-            Pointer pAddr,
-            IntByReference sendLen
+            IntByReference sendLen,
+            Pointer pAddr
     );
 
     BOOL WinDivertSetParam(

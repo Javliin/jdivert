@@ -22,6 +22,7 @@ import com.github.ffalcinelli.jdivert.headers.*;
 import com.github.ffalcinelli.jdivert.windivert.WinDivertAddress;
 import com.github.ffalcinelli.jdivert.windivert.WinDivertDLL;
 import com.sun.jna.Memory;
+import com.sun.jna.Native;
 
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -35,48 +36,45 @@ import static com.sun.jna.platform.win32.WinDef.UINT;
 import static com.sun.jna.platform.win32.WinDef.USHORT;
 
 /**
- * A single packet, possibly including an {@link com.github.ffalcinelli.jdivert.headers.Ip} header,
- * a {@link com.github.ffalcinelli.jdivert.headers.Tcp}/{@link com.github.ffalcinelli.jdivert.headers.Udp} header and a payload.
+ * A single packet, possibly including an {@link Ip} header,
+ * a {@link Tcp}/{@link Udp} header and a payload.
  * <p>
  * Creation of packets is cheap, attributes are parsed when accessing them.
  * </p>
  * Created by fabio on 21/10/2016.
  */
 public class Packet {
-
     private ByteBuffer raw;
     private Direction direction;
     private int[] iface;
+    private WinDivertAddress addr;
     private Transport transHdr;
     private Ip ipHdr;
     private Icmp icmpHdr;
 
     /**
-     * Construct a {@link Packet} from the given byte array and for the given {@link com.github.ffalcinelli.jdivert.windivert.WinDivertAddress} metadata.
+     * Construct a {@link Packet} from the given byte array and for the given {@link WinDivertAddress} metadata.
      *
      * @param raw  The packet's array of bytes.
      * @param addr The metadata (interface and direction).
      */
     public Packet(byte[] raw, WinDivertAddress addr) {
-        this(raw, new int[]{addr.IfIdx.intValue(), addr.SubIfIdx.intValue()},
-                Direction.fromValue(addr.Direction.intValue()));
+        this(raw, addr, Direction.fromValue((int) ((addr.flags.longValue() >> 17) & 1)));
     }
 
     /**
      * Construct a {@link Packet} from the given byte array and for the given metadata.
      *
      * @param raw       The packet's array of bytes.
-     * @param iface     The interface in form of {InterfaceIndex, InterfaceSubIndex} integer pair.
-     * @param direction The {@link Enums.Direction Direction}.
+     * @param addr      The packet's associated WinDivertAddress
+     * @param direction The {@link Direction Direction}.
      */
-    public Packet(byte[] raw, int[] iface, Direction direction) {
-        if (iface.length != 2) {
-            throw new IllegalArgumentException("Iface parameter must be a IfIdx, IfSubIdx pair");
-        }
+    public Packet(byte[] raw, WinDivertAddress addr, Direction direction) {
         this.raw = ByteBuffer.wrap(raw);
         this.raw.order(ByteOrder.BIG_ENDIAN);
         this.direction = direction;
-        this.iface = iface;
+        this.addr = addr;
+        this.iface = new int[]{addr.union.network.ifIdx.intValue(), addr.union.network.subIfIdx.intValue()};
         for (Header header : Header.buildHeaders(raw)) {
             if (header instanceof Ip) {
                 ipHdr = (Ip) header;
@@ -98,18 +96,18 @@ public class Packet {
     }
 
     /**
-     * Convenience method to check if the packet is {@link Enums.Direction#OUTBOUND OUTBOUND}.
+     * Convenience method to check if the packet is {@link Direction#OUTBOUND OUTBOUND}.
      *
-     * @return True if packet is {@link Enums.Direction#OUTBOUND OUTBOUND}, false otherwise.
+     * @return True if packet is {@link Direction#OUTBOUND OUTBOUND}, false otherwise.
      */
     public boolean isOutbound() {
         return direction == Direction.OUTBOUND;
     }
 
     /**
-     * Convenience method to check if the packet is {@link Enums.Direction#INBOUND INBOUND}.
+     * Convenience method to check if the packet is {@link Direction#INBOUND INBOUND}.
      *
-     * @return True if packet is {@link Enums.Direction#INBOUND INBOUND}, false otherwise.
+     * @return True if packet is {@link Direction#INBOUND INBOUND}, false otherwise.
      */
 
     public boolean isInbound() {
@@ -117,7 +115,7 @@ public class Packet {
     }
 
     /**
-     * Convenience method to check if the packet has a {@link com.github.ffalcinelli.jdivert.headers.Ipv4 Ip header version 4}.
+     * Convenience method to check if the packet has a {@link Ipv4 Ip header version 4}.
      *
      * @return True if packet is an Ipv4 one.
      */
@@ -126,7 +124,7 @@ public class Packet {
     }
 
     /**
-     * Convenience method to check if the packet has a {@link com.github.ffalcinelli.jdivert.headers.Ipv6 Ip header version 6}.
+     * Convenience method to check if the packet has a {@link Ipv6 Ip header version 6}.
      *
      * @return True if packet is an Ipv6 one.
      */
@@ -135,7 +133,7 @@ public class Packet {
     }
 
     /**
-     * Convenience method to check if the packet has a {@link com.github.ffalcinelli.jdivert.headers.Icmpv4 Icmp header version 4}
+     * Convenience method to check if the packet has a {@link Icmpv4 Icmp header version 4}
      *
      * @return True if packet is an Icmpv4 one
      */
@@ -144,7 +142,7 @@ public class Packet {
     }
 
     /**
-     * Convenience method to check if the packet has a {@link com.github.ffalcinelli.jdivert.headers.Icmpv6 Icmp header version 6}.
+     * Convenience method to check if the packet has a {@link Icmpv6 Icmp header version 6}.
      *
      * @return True if packet is an Icmpv6 one.
      */
@@ -153,7 +151,7 @@ public class Packet {
     }
 
     /**
-     * Convenience method to check if the packet has a {@link com.github.ffalcinelli.jdivert.headers.Udp Udp header}.
+     * Convenience method to check if the packet has a {@link Udp Udp header}.
      *
      * @return True if packet is an Udp one.
      */
@@ -162,7 +160,7 @@ public class Packet {
     }
 
     /**
-     * Convenience method to check if the packet has a {@link com.github.ffalcinelli.jdivert.headers.Tcp Tcp header}.
+     * Convenience method to check if the packet has a {@link Tcp Tcp header}.
      *
      * @return True if packet is an Tcp one.
      */
@@ -171,54 +169,54 @@ public class Packet {
     }
 
     /**
-     * Convenience method to get the {@link com.github.ffalcinelli.jdivert.headers.Tcp} if present.
+     * Convenience method to get the {@link Tcp} if present.
      *
-     * @return The {@link com.github.ffalcinelli.jdivert.headers.Tcp} if present, {@code null} otherwise.
+     * @return The {@link Tcp} if present, {@code null} otherwise.
      */
     public Tcp getTcp() {
         return isTcp() ? (Tcp) transHdr : null;
     }
 
     /**
-     * Convenience method to get the {@link com.github.ffalcinelli.jdivert.headers.Udp} if present.
+     * Convenience method to get the {@link Udp} if present.
      *
-     * @return The {@link com.github.ffalcinelli.jdivert.headers.Udp} if present, {@code null} otherwise.
+     * @return The {@link Udp} if present, {@code null} otherwise.
      */
     public Udp getUdp() {
         return isUdp() ? (Udp) transHdr : null;
     }
 
     /**
-     * Convenience method to get the {@link com.github.ffalcinelli.jdivert.headers.Icmpv4} if present.
+     * Convenience method to get the {@link Icmpv4} if present.
      *
-     * @return The {@link com.github.ffalcinelli.jdivert.headers.Icmpv4} if present, {@code null} otherwise.
+     * @return The {@link Icmpv4} if present, {@code null} otherwise.
      */
     public Icmpv4 getIcmpv4() {
         return isIcmpv4() ? (Icmpv4) icmpHdr : null;
     }
 
     /**
-     * Convenience method to get the {@link com.github.ffalcinelli.jdivert.headers.Icmpv6} if present.
+     * Convenience method to get the {@link Icmpv6} if present.
      *
-     * @return The {@link com.github.ffalcinelli.jdivert.headers.Icmpv6} if present, {@code null} otherwise.
+     * @return The {@link Icmpv6} if present, {@code null} otherwise.
      */
     public Icmpv6 getIcmpv6() {
         return isIcmpv6() ? (Icmpv6) icmpHdr : null;
     }
 
     /**
-     * Convenience method to get the {@link com.github.ffalcinelli.jdivert.headers.Ipv4} if present.
+     * Convenience method to get the {@link Ipv4} if present.
      *
-     * @return The {@link com.github.ffalcinelli.jdivert.headers.Ipv4} if present, {@code null} otherwise.
+     * @return The {@link Ipv4} if present, {@code null} otherwise.
      */
     public Ipv4 getIpv4() {
         return isIpv4() ? (Ipv4) ipHdr : null;
     }
 
     /**
-     * Convenience method to get the {@link com.github.ffalcinelli.jdivert.headers.Ipv6} if present.
+     * Convenience method to get the {@link Ipv6} if present.
      *
-     * @return The {@link com.github.ffalcinelli.jdivert.headers.Ipv6} if present, {@code null} otherwise.
+     * @return The {@link Ipv6} if present, {@code null} otherwise.
      */
     public Ipv6 getIpv6() {
         return isIpv6() ? (Ipv6) ipHdr : null;
@@ -274,7 +272,7 @@ public class Packet {
     /**
      * Convenience method to set the source port number.
      *
-     * @param port The port number to set for source service. If packet does not have such info an {@link java.lang.IllegalStateException} is thrown.
+     * @param port The port number to set for source service. If packet does not have such info an {@link IllegalStateException} is thrown.
      */
     public void setSrcPort(int port) {
         if (transHdr != null)
@@ -295,7 +293,7 @@ public class Packet {
     /**
      * Convenience method to set the destination port number.
      *
-     * @param port The port number to set for destination service. If packet does not have such info an {@link java.lang.IllegalStateException} is thrown.
+     * @param port The port number to set for destination service. If packet does not have such info an {@link IllegalStateException} is thrown.
      */
     public void setDstPort(int port) {
         if (transHdr != null)
@@ -355,23 +353,22 @@ public class Packet {
         byte[] rawBytes = getRaw();
         Memory memory = new Memory(rawBytes.length);
         memory.write(0, rawBytes, 0, rawBytes.length);
+        Native.setLastError(0);
         WinDivertDLL.INSTANCE.WinDivertHelperCalcChecksums(memory, rawBytes.length, flags);
         throwExceptionOnGetLastError();
 
         Util.setBytesAtOffset(raw, 0, rawBytes.length,
                 memory.getByteArray(0, rawBytes.length));
+
+        memory.close();
     }
 
     /**
-     * Put the {@link Packet} metadata into a {@link com.github.ffalcinelli.jdivert.windivert.WinDivertAddress} structure.
+     * Put the {@link Packet} metadata into a {@link WinDivertAddress} structure.
      *
-     * @return The {@link com.github.ffalcinelli.jdivert.windivert.WinDivertAddress} representing the packet metadata.
+     * @return The {@link WinDivertAddress} representing the packet metadata.
      */
     public WinDivertAddress getWinDivertAddress() {
-        WinDivertAddress addr = new WinDivertAddress();
-        addr.IfIdx = new UINT(iface[0]);
-        addr.SubIfIdx = new UINT(iface[1]);
-        addr.Direction = new USHORT(direction.getValue());
         return addr;
     }
 
