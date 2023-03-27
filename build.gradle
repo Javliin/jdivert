@@ -1,8 +1,5 @@
 plugins {
     id 'java'
-    id 'idea'
-    id 'jacoco'
-    id 'maven-publish'
 }
 
 group 'com.github.ffalcinelli'
@@ -18,35 +15,7 @@ repositories {
 dependencies {
     implementation group: 'net.java.dev.jna', name: 'jna', version: '5.12.1'
     implementation group: 'net.java.dev.jna', name: 'jna-platform', version: '5.12.1'
-    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.8.2'
+    //testImplementation group: 'junit', name: 'junit', version: '4.11'
+    //testImplementation 'junit:junit:4.13.1'
 }
 
-test {
-    systemProperty "jna.nosys", "true"
-}
-
-task deleteDocs(){
-    fileTree(dir: "docs", exclude: ".nojekyll")
-}
-
-task javadocJar(type: Jar) {
-    classifier = 'javadoc'
-    from javadoc
-}
-
-task sourcesJar(type: Jar) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
-}
-
-artifacts {
-    archives javadocJar, sourcesJar
-}
-
-publishing {
-    publications {
-        maven(MavenPublication) {
-            from components.java
-        }
-    }
-}
